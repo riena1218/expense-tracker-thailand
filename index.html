@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>THB小騎兵記帳</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap');
+        
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            overflow-x: hidden;
+            background-color: #f5f3ff;
+        }
+
+        .bicycle-anim {
+            animation: cycle 25s linear infinite;
+            position: fixed;
+            pointer-events: none;
+            z-index: 0;
+            opacity: 0.1;
+        }
+
+        @keyframes cycle {
+            0% { transform: translateX(-120vw) translateY(0); }
+            50% { transform: translateX(40vw) translateY(-20px); }
+            100% { transform: translateX(120vw) translateY(0); }
+        }
+
+        .dropdown-menu {
+            display: none;
+            transform-origin: top;
+            animation: dropdown-enter 0.2s ease-out forwards;
+        }
+
+        @keyframes dropdown-enter {
+            from { opacity: 0; transform: translateY(-10px) scaleY(0.95); }
+            to { opacity: 1; transform: translateY(0) scaleY(1); }
+        }
+
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #ddd6fe;
+            border-radius: 10px;
+        }
+
+        .expense-item {
+            transition: all 0.3s ease;
+        }
+        .expense-item:hover {
+            transform: translateX(5px);
+        }
+    </style>
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "date-fns": "https://esm.sh/date-fns@^4.1.0"
+  }
+}
+</script>
+</head>
+<body class="text-slate-800">
+    <!-- Animated Background Bicycles -->
+    <div class="bicycle-anim top-[15%]" style="animation-duration: 22s;">
+        <svg width="280" height="180" viewBox="0 0 100 60" fill="none" class="text-purple-400"><path d="M25 45 L40 20 L60 20 L75 45" stroke="currentColor" stroke-width="1.5"/><path d="M40 20 L30 45" stroke="currentColor" stroke-width="1.5"/><path d="M60 20 L55 45" stroke="currentColor" stroke-width="1.5"/><path d="M60 20 L65 15 C68 12, 72 15, 70 20 C69 22, 65 22, 65 20" stroke="currentColor" stroke-width="1.5" fill="none"/><circle cx="25" cy="45" r="12" stroke="currentColor" stroke-width="1"/><circle cx="75" cy="45" r="12" stroke="currentColor" stroke-width="1"/></svg>
+    </div>
+    <div class="bicycle-anim top-[70%]" style="animation-delay: -10s; animation-duration: 28s;">
+        <svg width="320" height="200" viewBox="0 0 100 60" fill="none" class="text-purple-300"><path d="M25 45 L40 20 L60 20 L75 45" stroke="currentColor" stroke-width="1.5"/><path d="M40 20 L30 45" stroke="currentColor" stroke-width="1.5"/><path d="M60 20 L55 45" stroke="currentColor" stroke-width="1.5"/><path d="M60 20 L65 15 C68 12, 72 15, 70 20 C69 22, 65 22, 65 20" stroke="currentColor" stroke-width="1.5" fill="none"/><circle cx="25" cy="45" r="12" stroke="currentColor" stroke-width="1"/><circle cx="75" cy="45" r="12" stroke="currentColor" stroke-width="1"/></svg>
+    </div>
+
+    <main class="relative z-10 container mx-auto px-4 py-8 max-w-5xl">
+        <header class="mb-10 text-center">
+            <h1 class="text-5xl font-extrabold text-purple-900 mb-2 tracking-tight drop-shadow-sm">THB小騎兵記帳</h1>
+            <p class="text-xl text-purple-600 font-medium">悠遊泰國，預算我有</p>
+        </header>
+
+        <!-- 週曆區域 -->
+        <section class="bg-white/80 backdrop-blur-md p-6 rounded-3xl shadow-xl border border-purple-100 mb-8 transition-all hover:shadow-2xl">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold text-purple-900 flex items-center"><span class="mr-2">🗓️</span> 週曆消費</h2>
+                <div class="flex items-center gap-4">
+                    <button id="prevWeek" class="p-2 hover:bg-purple-100 rounded-full transition-colors text-purple-600">◀</button>
+                    <span id="weekLabel" class="font-bold text-purple-800 text-sm"></span>
+                    <button id="nextWeek" class="p-2 hover:bg-purple-100 rounded-full transition-colors text-purple-600">▶</button>
+                </div>
+            </div>
+            <div id="calendarGrid" class="grid grid-cols-7 gap-1">
+                <!-- 由 JS 渲染 -->
+            </div>
+        </section>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-8">
+            <!-- 左側：新增紀錄與明細 -->
+            <div class="lg:col-span-7 space-y-6">
+                <section class="bg-white/80 backdrop-blur-md p-6 rounded-3xl shadow-xl border border-purple-100">
+                    <h2 class="text-xl font-bold text-purple-900 mb-4 flex items-center"><span class="mr-2">✍️</span> 新增當日紀錄</h2>
+                    
+                    <form id="expenseForm" class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-purple-400 uppercase tracking-wider mb-1">日期</label>
+                            <input type="date" id="inputDate" class="w-full bg-purple-50 border border-purple-200 rounded-xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all">
+                        </div>
+
+                        <div class="relative">
+                            <label class="block text-xs font-semibold text-purple-400 uppercase tracking-wider mb-1">記帳類別</label>
+                            <button type="button" id="dropdownBtn" class="w-full flex justify-between items-center bg-purple-50 border border-purple-200 rounded-xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all">
+                                <span id="selectedCategoryLabel" class="text-slate-400">請選擇類別</span>
+                                <span class="transition-transform" id="dropdownArrow">▼</span>
+                            </button>
+                            <div id="categoryMenu" class="dropdown-menu absolute z-50 mt-2 w-full bg-white rounded-xl shadow-2xl border border-purple-100 overflow-hidden">
+                                <div id="categoryList" class="grid grid-cols-2 gap-1 p-2">
+                                    <!-- 由 JS 渲染 -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-purple-400 uppercase tracking-wider mb-1">金額 (THB)</label>
+                            <input type="number" id="inputAmount" placeholder="0.00" class="w-full bg-purple-50 border border-purple-200 rounded-xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all font-mono font-bold text-lg" required>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-purple-400 uppercase tracking-wider mb-1">備註</label>
+                            <input type="text" id="inputNote" placeholder="寫點什麼..." class="w-full bg-purple-50 border border-purple-200 rounded-xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all">
+                        </div>
+
+                        <div class="flex items-center justify-between pt-2">
+                            <div id="budgetAlert" class="h-8 flex items-center text-sm font-bold"></div>
+                            <button type="submit" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-8 rounded-xl shadow-lg hover:shadow-purple-200 transition-all transform active:scale-95">新增一筆</button>
+                        </div>
+
+                        <div class="pt-4 border-t border-purple-100 flex justify-between items-center">
+                            <span class="text-sm font-medium text-purple-400">當日總計:</span>
+                            <span id="todayTotalLabel" class="text-xl font-mono font-black text-purple-900">0 ฿</span>
+                        </div>
+                    </form>
+
+                    <!-- 當日明細 -->
+                    <div class="mt-8 pt-6 border-t border-purple-100">
+                        <h3 id="detailsTitle" class="text-lg font-bold text-purple-800 mb-4">今日明細</h3>
+                        <div id="detailsList" class="space-y-2 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
+                            <!-- 由 JS 渲染 -->
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- 右側：圓餅圖 -->
+            <div class="lg:col-span-5">
+                <section class="bg-white/80 backdrop-blur-md p-6 rounded-3xl shadow-xl border border-purple-100 h-full flex flex-col">
+                    <h2 class="text-xl font-bold text-purple-900 mb-6 flex items-center"><span class="mr-2">📊</span> 類別花費比例</h2>
+                    <div class="flex-grow flex items-center justify-center relative min-h-[300px]">
+                        <canvas id="categoryChart"></canvas>
+                        <div id="emptyChartMsg" class="hidden absolute inset-0 flex items-center justify-center text-purple-300 italic text-sm">尚無消費數據</div>
+                    </div>
+                    <div class="mt-6 p-4 bg-purple-50 rounded-2xl border border-purple-100">
+                        <p class="text-xs text-purple-400 text-center leading-relaxed">圖表統計目前所有類別分佈情況，<br/>助您掌握每一分泰銖的去向。</p>
+                    </div>
+                </section>
+            </div>
+        </div>
+
+        <!-- 總花費統計 -->
+        <div class="mt-12 bg-purple-900 text-white p-8 rounded-[2rem] shadow-2xl relative overflow-hidden group">
+            <div class="absolute top-0 right-0 w-64 h-64 bg-purple-700 rounded-full -mr-20 -mt-20 opacity-30 group-hover:scale-110 transition-transform duration-700"></div>
+            <div class="absolute bottom-0 left-0 w-48 h-48 bg-purple-500 rounded-full -ml-16 -mb-16 opacity-20"></div>
+            <div class="relative z-10 grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+                <div>
+                    <p class="text-purple-300 text-sm font-bold uppercase tracking-widest mb-1">當前累計總花費</p>
+                    <h3 class="text-5xl font-black font-mono"><span id="allTotalLabel">0</span> <span class="text-2xl font-sans font-normal opacity-70">THB</span></h3>
+                </div>
+                <div class="bg-white/10 backdrop-blur-sm p-6 rounded-2xl border border-white/10 flex flex-col justify-center items-center md:items-end">
+                    <p class="text-purple-200 text-xs font-bold uppercase mb-2">距離 2026/02/05 完騎還有</p>
+                    <div class="flex items-baseline">
+                        <span id="daysLeftLabel" class="text-5xl font-black mr-2 text-purple-100">0</span>
+                        <span class="text-xl font-bold text-purple-300 uppercase">天</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="fixed bottom-0 left-0 w-full bg-purple-900/95 backdrop-blur-md text-white py-3 text-center text-sm font-semibold z-50 shadow-[0_-4px_10px_rgba(0,0,0,0.1)]">
+        Designed by Reina🩷
+    </footer>
+
+    <script>
+        // --- 常數設定 ---
+        const CATEGORIES = [
+            { name: '早餐', emoji: '🥐', color: '#C084FC' },
+            { name: '午餐', emoji: '🍜', color: '#A855F7' },
+            { name: '晚餐', emoji: '🍱', color: '#9333EA' },
+            { name: '補給', emoji: '🥤', color: '#7E22CE' },
+            { name: '住宿', emoji: '🏨', color: '#6B21A8' },
+            { name: '雜支', emoji: '🏷️', color: '#581C87' },
+            { name: '娛樂', emoji: '🎡', color: '#D8B4FE' },
+            { name: '交通', emoji: '🚲', color: '#E9D5FF' },
+        ];
+        const TRIP_START_DATE = '2026-01-17';
+        const TARGET_DATE = '2026-02-05';
+        const BUDGET_T1 = 800;
+        const BUDGET_T2 = 1000;
+
+        // --- 狀態管理 ---
+        let expenses = JSON.parse(localStorage.getItem('cycle_expenses')) || [];
+        let selectedDate = new Date().toISOString().split('T')[0];
+        let weekStart = new Date(TRIP_START_DATE);
+        // 如果目前日期比起始日更晚，則調整周起點到目前所在的周
+        const now = new Date();
+        if (now > weekStart) {
+            const diff = now.getTime() - weekStart.getTime();
+            const weeks = Math.floor(diff / (7 * 24 * 60 * 60 * 1000));
+            weekStart.setDate(weekStart.getDate() + (weeks * 7));
+        }
+        
+        let currentCategory = '';
+        let chartInstance = null;
+
+        // --- DOM 元素 ---
+        const calendarGrid = document.getElementById('calendarGrid');
+        const weekLabel = document.getElementById('weekLabel');
+        const expenseForm = document.getElementById('expenseForm');
+        const inputDate = document.getElementById('inputDate');
+        const inputAmount = document.getElementById('inputAmount');
+        const inputNote = document.getElementById('inputNote');
+        const dropdownBtn = document.getElementById('dropdownBtn');
+        const categoryMenu = document.getElementById('categoryMenu');
+        const categoryList = document.getElementById('categoryList');
+        const selectedCategoryLabel = document.getElementById('selectedCategoryLabel');
+        const dropdownArrow = document.getElementById('dropdownArrow');
+        const budgetAlert = document.getElementById('budgetAlert');
+        const todayTotalLabel = document.getElementById('todayTotalLabel');
+        const detailsTitle = document.getElementById('detailsTitle');
+        const detailsList = document.getElementById('detailsList');
+        const allTotalLabel = document.getElementById('allTotalLabel');
+        const daysLeftLabel = document.getElementById('daysLeftLabel');
+        const emptyChartMsg = document.getElementById('emptyChartMsg');
+
+        // --- 初始化功能 ---
+        function init() {
+            inputDate.value = selectedDate;
+            renderCategoryOptions();
+            renderCalendar();
+            renderUI();
+
+            // 監聽日期變更
+            inputDate.addEventListener('change', (e) => {
+                selectedDate = e.target.value;
+                renderUI();
+                renderCalendar();
+            });
+
+            // 類別選單切換
+            dropdownBtn.addEventListener('click', () => {
+                const isHidden = categoryMenu.style.display === 'none' || categoryMenu.style.display === '';
+                categoryMenu.style.display = isHidden ? 'block' : 'none';
+                dropdownArrow.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
+            });
+
+            // 週導航
+            document.getElementById('prevWeek').addEventListener('click', () => {
+                weekStart.setDate(weekStart.getDate() - 7);
+                renderCalendar();
+            });
+            document.getElementById('nextWeek').addEventListener('click', () => {
+                weekStart.setDate(weekStart.getDate() + 7);
+                renderCalendar();
+            });
+
+            // 表單提交
+            expenseForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                if (!currentCategory || !inputAmount.value) return;
+
+                const newExpense = {
+                    id: crypto.randomUUID(),
+                    date: inputDate.value,
+                    category: currentCategory,
+                    amount: parseFloat(inputAmount.value),
+                    note: inputNote.value
+                };
+
+                expenses.push(newExpense);
+                save();
+                resetForm();
+                renderUI();
+                renderCalendar();
+            });
+        }
+
+        function save() {
+            localStorage.setItem('cycle_expenses', JSON.stringify(expenses));
+        }
+
+        function resetForm() {
+            inputAmount.value = '';
+            inputNote.value = '';
+            currentCategory = '';
+            selectedCategoryLabel.innerText = '請選擇類別';
+            selectedCategoryLabel.classList.add('text-slate-400');
+        }
+
+        function renderCategoryOptions() {
+            categoryList.innerHTML = '';
+            CATEGORIES.forEach(cat => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-purple-50 transition-colors text-sm text-left';
+                btn.innerHTML = `<span>${cat.emoji}</span><span class="text-purple-700 font-medium">${cat.name}</span>`;
+                btn.onclick = () => {
+                    currentCategory = cat.name;
+                    selectedCategoryLabel.innerText = `${cat.emoji} ${cat.name}`;
+                    selectedCategoryLabel.classList.remove('text-slate-400');
+                    categoryMenu.style.display = 'none';
+                    dropdownArrow.style.transform = 'rotate(0deg)';
+                };
+                categoryList.appendChild(btn);
+            });
+        }
+
+        function renderCalendar() {
+            calendarGrid.innerHTML = '';
+            // 星期標頭
+            ['六', '日', '一', '二', '三', '四', '五'].forEach(d => {
+                const el = document.createElement('div');
+                el.className = 'text-center text-xs font-bold text-purple-300 uppercase py-1';
+                el.innerText = d;
+                calendarGrid.appendChild(el);
+            });
+
+            const start = new Date(weekStart);
+            const end = new Date(start);
+            end.setDate(end.getDate() + 6);
+            weekLabel.innerText = `${start.getMonth()+1}/${start.getDate()} - ${end.getMonth()+1}/${end.getDate()}, 2026`;
+
+            for (let i = 0; i < 7; i++) {
+                const day = new Date(start);
+                day.setDate(day.getDate() + i);
+                const dStr = day.toISOString().split('T')[0];
+                const isSelected = selectedDate === dStr;
+                const total = expenses.filter(e => e.date === dStr).reduce((s, e) => s + e.amount, 0);
+                
+                const btn = document.createElement('button');
+                btn.className = `relative flex flex-col items-center justify-center py-3 rounded-2xl transition-all ${isSelected ? 'bg-purple-600 text-white scale-110 shadow-lg z-10' : 'hover:bg-purple-50 text-slate-600'}`;
+                
+                btn.innerHTML = `
+                    <span class="text-xs ${isSelected ? 'text-purple-100' : 'text-purple-400'}">${day.getDate()}</span>
+                    <span class="text-[10px] font-mono mt-1 font-bold">${total > 0 ? total : '—'}</span>
+                    ${total > 0 ? `<div class="mt-1 w-1.5 h-1.5 rounded-full ${total > BUDGET_T2 ? 'bg-red-500 animate-pulse' : total > BUDGET_T1 ? 'bg-orange-400' : 'bg-green-400'}"></div>` : ''}
+                `;
+                btn.onclick = () => {
+                    selectedDate = dStr;
+                    inputDate.value = dStr;
+                    renderUI();
+                    renderCalendar();
+                };
+                calendarGrid.appendChild(btn);
+            }
+        }
+
+        function renderUI() {
+            const filtered = expenses.filter(e => e.date === selectedDate);
+            const todayTotal = filtered.reduce((s, e) => s + e.amount, 0);
+            
+            // 預算提醒
+            budgetAlert.innerHTML = '';
+            if (todayTotal > BUDGET_T2) {
+                budgetAlert.className = 'text-red-600 animate-bounce h-8 flex items-center';
+                budgetAlert.innerText = '小心吃土🪏🫠';
+            } else if (todayTotal > BUDGET_T1) {
+                budgetAlert.className = 'text-orange-500 animate-pulse h-8 flex items-center';
+                budgetAlert.innerText = '⚠️⚠️預算要破表了';
+            }
+
+            todayTotalLabel.innerText = `${todayTotal.toLocaleString()} ฿`;
+            detailsTitle.innerText = `今日明細 (${selectedDate})`;
+
+            // 明細列表
+            detailsList.innerHTML = '';
+            if (filtered.length === 0) {
+                detailsList.innerHTML = '<div class="text-center py-8"><p class="text-purple-300 text-sm italic">尚無紀錄，點擊上方按鈕開始記帳吧！</p></div>';
+            } else {
+                filtered.forEach(e => {
+                    const catInfo = CATEGORIES.find(c => c.name === e.category);
+                    const div = document.createElement('div');
+                    div.className = 'expense-item flex justify-between items-center bg-purple-50 p-4 rounded-2xl border border-purple-100 group transition-all hover:bg-purple-100';
+                    div.innerHTML = `
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm text-xl">${catInfo.emoji}</div>
+                            <div>
+                                <div class="font-bold text-purple-900">${e.category}</div>
+                                <div class="text-xs text-purple-500">${e.note || ''}</div>
+                            </div>
+                        </div>
+                        <div class="flex items-center">
+                            <span class="font-mono font-black text-purple-900 text-lg mr-4">${e.amount} ฿</span>
+                            <button onclick="deleteItem('${e.id}')" class="w-8 h-8 flex items-center justify-center rounded-full bg-red-100 text-red-500 hover:bg-red-500 hover:text-white transition-all opacity-0 group-hover:opacity-100">✕</button>
+                        </div>
+                    `;
+                    detailsList.appendChild(div);
+                });
+            }
+
+            // 總計
+            const allTotal = expenses.reduce((s, e) => s + e.amount, 0);
+            allTotalLabel.innerText = allTotal.toLocaleString();
+
+            const target = new Date(TARGET_DATE);
+            const now = new Date();
+            const diff = Math.ceil((target - now) / (1000 * 60 * 60 * 24));
+            daysLeftLabel.innerText = diff > 0 ? diff : 0;
+
+            renderChart();
+        }
+
+        function deleteItem(id) {
+            expenses = expenses.filter(e => e.id !== id);
+            save();
+            renderUI();
+            renderCalendar();
+        }
+
+        function renderChart() {
+            const dataMap = CATEGORIES.reduce((acc, cat) => {
+                acc[cat.name] = expenses.filter(e => e.category === cat.name).reduce((s, e) => s + e.amount, 0);
+                return acc;
+            }, {});
+
+            const labels = CATEGORIES.map(c => `${c.emoji} ${c.name}`);
+            const dataValues = CATEGORIES.map(c => dataMap[c.name]);
+            const colors = CATEGORIES.map(c => c.color);
+
+            const hasData = expenses.length > 0;
+            emptyChartMsg.classList.toggle('hidden', hasData);
+
+            if (chartInstance) {
+                chartInstance.data.datasets[0].data = dataValues;
+                chartInstance.update();
+            } else {
+                const ctx = document.getElementById('categoryChart').getContext('2d');
+                chartInstance = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels,
+                        datasets: [{
+                            data: dataValues,
+                            backgroundColor: colors,
+                            borderColor: '#ffffff',
+                            borderWidth: 3,
+                            hoverOffset: 15
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'right',
+                                labels: { boxWidth: 12, padding: 10, font: { size: 11, family: 'Noto Sans TC' } }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: (ctx) => {
+                                        const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                                        const pct = total > 0 ? Math.round((ctx.raw / total) * 100) : 0;
+                                        return ` ${ctx.raw} ฿ (${pct}%)`;
+                                    }
+                                }
+                            }
+                        },
+                        cutout: '65%',
+                        animation: { animateRotate: true, animateScale: true }
+                    }
+                });
+            }
+        }
+
+        // 啟動應用
+        init();
+    </script>
+</body>
+</html>
